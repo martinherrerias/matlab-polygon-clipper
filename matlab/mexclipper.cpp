@@ -7,15 +7,16 @@
 
 using namespace ClipperLib;
 
-typedef __int64 LONG64; 
-typedef __int64 long64;
+typedef __int64 LONG64;
 
 void read_polygons_MATLAB(const mxArray *prhs, Paths &poly) 
 {
     int id_x, id_y;
     int num_contours;
     int nx, ny;
-    long64 *x, *y;
+    LONG64 *x, *y;
+	short *x16, *y16;
+	bool is16bits;
     const mxArray *x_in, *y_in;
     
     /*  Checking if input is non empty Matlab-structure */
@@ -30,15 +31,18 @@ void read_polygons_MATLAB(const mxArray *prhs, Paths &poly)
         mexErrMsgTxt("Input structure must contain a field 'x'.");
     
     x_in = mxGetFieldByNumber(prhs, 0, id_x);
-    if (!mxIsInt64(x_in))
-        mexErrMsgTxt("Structure field 'x' must be of type INT64.");
+	is16bits = mxIsInt16(x_in);
+    if (!mxIsInt64(x_in) && !is16bits)
+        mexErrMsgTxt("Structure field 'x' must be of type INT64/INT16.");
     
     id_y = mxGetFieldNumber(prhs,"y");
     if (id_y==-1)
         mexErrMsgTxt("Input structure must contain a field 'y'.");
     y_in = mxGetFieldByNumber(prhs, 0, id_y);
-    if (!mxIsInt64(y_in))
-        mexErrMsgTxt("Structure field 'y' must be of type INT64.");
+	if (is16bits && !mxIsInt16(y_in))
+		mexErrMsgTxt("Structure fields 'x' and 'y' must be of the same type");
+    if (!mxIsInt64(y_in)&& !is16bits)
+        mexErrMsgTxt("Structure field 'y' must be of type INT64/INT16.");
     
     num_contours = mxGetNumberOfElements(prhs);
     poly.resize(num_contours);
@@ -53,27 +57,49 @@ void read_polygons_MATLAB(const mxArray *prhs, Paths &poly)
         
         poly[i].resize(nx);
         
-        x = (long64*)mxGetData(x_in);
-        y = (long64*)mxGetData(y_in);
-        for (unsigned j = 0; j < nx; j++){
-            poly[i][j].X = x[j];
-            poly[i][j].Y = y[j];
-        }
+		if (!is16bits) {
+			x = (LONG64*)mxGetData(x_in);
+			y = (LONG64*)mxGetData(y_in);
+			for (unsigned j = 0; j < nx; j++){
+				poly[i][j].X = x[j];
+				poly[i][j].Y = y[j];
+			}
+		}
+		else {
+			x16 = (short*)mxGetData(x_in);
+			y16 = (short*)mxGetData(y_in);
+			for (unsigned j = 0; j < nx; j++){
+				poly[i][j].X = (LONG64)x16[j];
+				poly[i][j].Y = (LONG64)y16[j];
+			}
+		}
     }
 }
 
 void write_polygons_MATLAB(mxArray *plhs, Paths &solution) 
 {
     mxArray *x_out, *y_out;
+    mwSize dims[2];
+    dims[0] = 1;
     
     for (unsigned i = 0; i < solution.size(); ++i)
     {
-        x_out = mxCreateDoubleMatrix(solution[i].size(),1,mxREAL);
-        y_out = mxCreateDoubleMatrix(solution[i].size(),1,mxREAL);
+        dims[1] = solution[i].size();
+        x_out = mxCreateNumericArray(2,dims,mxINT64_CLASS,mxREAL);
+        y_out = mxCreateNumericArray(2,dims,mxINT64_CLASS,mxREAL);
+        
+        /* Either you take AND return doubles, or you take and return int64, but not take one
+         * and return the other... so, while we fix the MEX function to take (double) Polygons
+         * let's ensure some consistency, otherwise precision errors are a pain in the */
+        
+        //x_out = mxCreateDoubleMatrix(solution[i].size(),1,mxREAL);
+        //y_out = mxCreateDoubleMatrix(solution[i].size(),1,mxREAL);
         for (unsigned j = 0; j < solution[i].size(); ++j)
         {
-            ((double*)mxGetPr(x_out))[j]=solution[i][j].X;
-            ((double*)mxGetPr(y_out))[j]=solution[i][j].Y;
+            //((double*)mxGetPr(x_out))[j]=solution[i][j].X;
+            //((double*)mxGetPr(y_out))[j]=solution[i][j].Y;
+            ((LONG64*)mxGetPr(x_out))[j]=solution[i][j].X;
+            ((LONG64*)mxGetPr(y_out))[j]=solution[i][j].Y;
         }
         mxSetFieldByNumber(plhs,i,0,x_out);
         mxSetFieldByNumber(plhs,i,1,y_out);
@@ -85,7 +111,7 @@ void mexFunction(int nlhs, mxArray *plhs[],
 {
     Paths subj, clip, solution;
     const char *field_names[] = {"x","y"};
-    int dims[2];
+    mwSize dims[2];
     
     if (nrhs == 0) {
         mexPrintf("OutPol = clipper(RefPol, ClipPol, Method, [RefF], [ClipF]);\n");
@@ -145,7 +171,8 @@ void mexFunction(int nlhs, mxArray *plhs[],
     }
     else if (nrhs == 2 || (nrhs>=3&&nrhs<=4&&mxIsChar(prhs[2])))
     {   // Offset single input polygon
-        if (!mxIsStruct(prhs[0]) || mxGetM(prhs[0])!=1 || mxGetN(prhs[0])!=1)
+        //if (!mxIsStruct(prhs[0]) || mxGetM(prhs[0])!=1 || mxGetN(prhs[0])!=1)
+		if (!mxIsStruct(prhs[0]))
             mexErrMsgTxt("First input must be a scalar polygon structure (with fields .x and .y).");
         if (!mxIsDouble(prhs[1]) || mxGetM(prhs[1])!=1 || mxGetN(prhs[1])!=1)
             mexErrMsgTxt("Second input must be either a structure (a second polygon) or a scalar double (outset Delta).");

@@ -12,9 +12,9 @@ The work is done by the MEX file private/clipper (which must be compiled).
 
 INSTALLATION
 
-Make '.../clipper2/mex code' the working directory, and compile for your platform:
+Make '.../clipper/matlab' the working directory, and compile for your platform:
 
-mex '-D__int64=__int64_t' 'clipper.cpp' 'mexclipper.cpp'
+mex '-D__int64=__int64_t' '-I../cpp' '../cpp/clipper.cpp' 'mexclipper.cpp'
 
 Run polyclip_test and polyout_test to check that everything works allright.
 
