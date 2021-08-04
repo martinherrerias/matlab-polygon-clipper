@@ -1,94 +1,81 @@
-function [X,Y] = polyout(x1,y1,delta,join,info)
-% POLYOUT  Outset (expand/inflate) a polygon.
-% 
-%  [X,Y] = POLYOUT(X1,Y1,DELTA,JOIN,JOININFO) outsets the polygon given by
-%  points (X1(i),Y1(i)).  The corners are joined based on the (optional) JOIN:
-%    JOIN = 'm' or 'miter' ==> exact corners but square at small angles (default)
-%               Optional JOININFO is the miter limit, a multiple of DELTA;
-%               if the corner point would be moved more than JOININFO*DELTA,
-%               then it is squared off instead.  The default value, as well
-%               as the minimum allowed, is 2.
-%    JOIN = 's' or 'square' ==> square off corners
-%               JOININFO is ignored.
-%    JOIN = 'r' or 'round'  ==> round corners
-%               Required JOININFO sets the precision of points along the arc
-%               (smaller JOININFO ==> more points along the arc); for a 180deg
-%               arc, the number of points is (pi/acos(1-JOININFO/DELTA) using
-%               the same scaling as the polygon points.
-%  X1 and Y1 must be vectors of the same size. JOININFO must be a scalar double.
+function r = polyout(p,delta,jointype,par,scale)
+% q = POLYOUT(p,delta)  Outset (expand/inflate) or contract the polygon p by a distance delta.
+% q = POLYOUT(p,delta,jointype,par) use vertex-offseting-type jointype, with parameter par
+% r = POLYOUT(p,delta,jointype,par,scale) specify a custom scale for int64 conversion.
 %
-%  X and Y are cell arrays (because the result may be multiple polygons)
-%  containing the x and y coordinates of the resulting polygon(s).
-%  
-%  XY = POLYOUT([X1 Y1],DELTA,JOIN,JOININFO) does the same for column vectors
-%  X1 and Y1, and XY is {X Y}.
+%   p: polygon object(s) or structure(s) with fields (x,y,hole). Anything else will be passed 
+%       to polygon(), so it should work with [xx,yy], [w,h], etc.
+%   delta: distance to offset, positive for outset (expand/inflate), negative to contract.
+%   jointype: vertex-offseting, or 'expanded-corner' type
+%       http://www.angusj.com/delphi/clipper/documentation/Docs/Units/ClipperLib/Types/JoinType.htm
+%       'm' or 'miter' (default) - exact corners but square at small angles
+%               Optional parameter par is the miter-limit, a multiple of delta; if the corner
+%               point would be moved more than par·delta, then it is squared-off instead. 
+%               The default value, as well as the minimum allowed, is 2.
+%       's' or 'square' - square off corners, par is ignored.
+%       'r' or 'round'  - round corners. Required par sets the precision of points along the arc
+%               (smaller par - more points along the arc); for a 180° arc, the number of points
+%               is (pi/acos(1-par/delta) using the same scaling as the polygon points.
+%   par: scalar parameter for jointype 'm' or 'r' (see above).
+%   scale: the clipper library internally uses 62-bit integers, so floating-point numbers must be
+%       scaled-up, offseted, and scaled-down for reasonable precision. The default scale factor is
+%       2^32, but can be modified when the scale of the polygons p,q is far from O(1).
+%   q: resulting polygon object, or an array of polygons, in case of fragmented output, i.e. holes, 
+%       split polygons, etc.
 %
-% See also CLIPPER, POLYCLIP.
-% Copyright (c)2015-17, Prof. Erik A. Johnson <JohnsonE@usc.edu>, 01/28/17
-% 09/13/15  EAJ  Initial code
-% 01/28/17  EAJ  Update for newer MATLAB versions
-% 01/29/17  EAJ  Correct [X1 Y1] code (change x & y to x1 & y1)
-narginchk(2,5)
-nargoutchk(0,2)
-if nargin==2 || (nargin>=3&&ischar(delta))  % POLYOUT([X1 Y1],DELTA,...)
-	narginchk(2,4)
-	if nargin>=3,
-		if nargin==4
-			info = join;
-		end;
-		join = delta;
-	else
-		join = [];
-		info = [];
-	end
-	delta = y1;
-	y1 = x1(:,end/2+1:end);
-	x1(:,end/2+1:end) = [];
-else
-	if nargin<4, join=[]; end;
-	if nargin<5, info=[]; end;
-end
-if isempty(join), join='miter'; end; %default join method
-if ~ischar(join), error('JOIN must be a string'); end;
-if isempty(info)
-	infoArg = {};
-else
-	infoArg = {info};
-end
-scale=2^32;
-% leave this in array format just in case we later adapt this
-pack   = @(p) arrayfun(@(x) struct('x', int64(x.x*scale),'y', int64(x.y*scale)),p);
-unpack = @(p) arrayfun(@(x) struct('x',double(x.x)/scale,'y',double(x.y)/scale),p);
-packdelta   = @(d) d*scale;
-packarc = packdelta;
-packmiter = @(m) m;
-if lower(join(1))=='r'
-	if isempty(info)
-		info = (abs(delta)+(delta==0))*(1-cosd(5)); % about every 5 degrees
-		% error('A ''round'' JOIN must provice the ArcTolerance as the fourth argument.')
-	end
-	infoArg = {packarc(info)};
-end
-if ~isnumeric(x1) || ~isnumeric(y1)
-	error('The polygon coordinates must be numeric matrices.')
-elseif numel(x1)~=length(x1) || numel(y1)~=length(y1)
-	error('Function only handles a single polygon');
-elseif numel(x1)~=numel(y1)
-	error('X1 must be the same size as Y1, and X2 the same size as Y2.');
-end;
-x1=x1(:); y1=y1(:); % ensure column
-poly1 = struct('x',num2cell(x1,1),'y',num2cell(y1,1));
-assert(numel(poly1)==1, 'Only single polygon outsets are allowed in the current code');
-poly3 = unpack(clipper(pack(poly1),packdelta(delta),join,infoArg{:}));
-if isempty(poly3)
-	x = cell(1,0);
-	y = cell(1,0);
-else
-	x = {poly3.x};
-	y = {poly3.y};
-end
-if nargout>=2
-	X=x; Y=y;
-else
-	X={x y};
+% See also CLIPPER, POLYCLIP, POLYGON
+%
+% Modified from: (c)2015-17, Prof. Erik A. Johnson <JohnsonE@usc.edu>, 01/28/17
+
+    narginchk(2,5)
+
+    if nargin < 3 || isempty(jointype), jointype = 'square'; end
+    if ~ischar(jointype), jointype = 'x'; end % force crash below (*)
+    jointype = lower(jointype(1));
+   
+    if nargin < 4, par = []; 
+    elseif jointype ~= 's'
+        assert(isscalar(par),'polyout:par','jointype parameter must be scalar');
+    end
+  
+    if nargin < 5, scale = NaN; end
+
+    switch jointype
+        case 'r'
+            if isempty(par), par = (abs(delta)+(delta==0))*(1-cosd(5)); end % about every 5 degrees
+            parArg = {scale*par}; % scale
+        case 'm'
+            if isempty(par), par = 2; end
+            parArg = {par}; % relative to delta, don't scale
+        case 's'
+            parArg = {};
+        otherwise
+            error('polyout:jointype',...
+                'jointype must be a string/character and start with ''m'', ''s'', or ''r''');
+    end
+
+
+    pwaspacked = isstruct(p);
+
+    if isnan(scale)
+        if pwaspacked && ~isempty(p), scale = mode([p.scale]);
+        else, scale = polygon.SCALE; 
+        end
+    end
+    scale = double(scale);
+    
+    if ~pwaspacked
+        hiRange = int64(2)^62-1-int64(max(0,delta)*scale); % leave space for outset
+        p = pack(p,scale,hiRange); 
+        delta = delta*scale;
+    end
+
+    r = clipper(p,delta,jointype,parArg{:});
+    [r.scale] = deal(scale);
+ 
+    if isempty(r), r = polygon.empty; 
+    elseif ~pwaspacked
+        r = polygon.unpack(r);
+        % r = fixorientation(r,true);
+    end
 end
