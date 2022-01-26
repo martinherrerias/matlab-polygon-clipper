@@ -13,6 +13,10 @@ The work is done by the MEX file matlab/clipper (which must be compiled).
 
 INSTALLATION
 
+   Clone repo (make sure you are on the 'polygon' branch):
+   
+      git clone --branch polygon https://github.com/martinherrerias/matlab-polygon-clipper.git
+
    Make '.../clipper/matlab' the working directory, and compile for your platform:
 
       mex '-D__int64=__int64_t' '-I../cpp' '../cpp/clipper.cpp' 'mexclipper.cpp'
