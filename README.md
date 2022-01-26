@@ -1,13 +1,14 @@
 # matlab-polygon-clipper
 An unofficial fork of Erik Johnson's MEX interface to Angus Johnsons's polygon clipper.
 
-BRANCHES:
-   main -- contains Erik Johnson's code with minor fixes
-   polygon -- adapted to work with the polygon class in https://github.com/martinherrerias/matlab-utils
+BRANCHES
+   - main -- contains Erik Johnson's code with minor fixes
+   - polygon -- adapted to work with the polygon class in https://github.com/martinherrerias/matlab-utils
 
-FUNCTIONS:
-   polyclip -- find the difference, intersection, xor or union of two polygons
-   polyout  -- outset (or inset) a polygon's vertices
+FUNCTIONS
+
+   - polyclip -- find the difference, intersection, xor or union of two polygons
+   - polyout  -- outset (or inset) a polygon's vertices
 
 The work is done by the MEX file matlab/clipper (which must be compiled).
 
