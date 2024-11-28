@@ -30,6 +30,8 @@ function r = polyclip(p,q,method,pFT,qFT,scale,nbits)
 % See also CLIPPER, POLYOUT, POLYGON.
 % 
 % Modified from: (c) 2015-17, Prof. Erik A. Johnson <JohnsonE@usc.edu>, 01/29/17
+%
+% TODO: Update to clipper2! http://www.angusj.com/clipper2/Docs/Changes.htm
 
     % Rewrite polygon.isvoid (must work with pre-packed structures)
     isvoid = @(P) isempty(P) || all(arrayfun(@(j) numel(P(j).x) < 3,1:numel(P)));
